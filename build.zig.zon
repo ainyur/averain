@@ -1,0 +1,16 @@
+.{
+    .name = .averain,
+    .fingerprint = 0xaa12db7fca162c19,
+    .version = "0.0.0",
+    .dependencies = .{
+        .sdl = .{
+            .url = "git+https://github.com/allyourcodebase/SDL3#467a4baad2acdda1bcf717065793fbbdf2569f8d",
+            .hash = "sdl-0.0.0-i4QD0WN-qQB1RKdRC9-6iZyTco2jIIr3y2DFrAz-D9CH",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
