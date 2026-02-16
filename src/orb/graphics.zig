@@ -38,6 +38,9 @@ pub const Resolution = enum {
 pub fn GraphicsWith(comptime w: u32, comptime h: u32) type {
     return struct {
         const Self = @This();
+        const ase = @import("ase.zig");
+        const font_mod = @import("font.zig");
+
         pub const width = w;
         pub const height = h;
 
@@ -55,17 +58,23 @@ pub fn GraphicsWith(comptime w: u32, comptime h: u32) type {
             self.px[y * w + x] = index;
         }
 
-        /// Blit sprite pixel indices onto framebuffer. Index 0 is transparent.
+        /// Blit frame 0 of a sprite. Index 0 is transparent.
         /// Signed position allows partial offscreen sprites (clips to bounds).
-        pub fn blit(self: *Self, sprite: []const u8, sx: i32, sy: i32, sw: u32, sh: u32) void {
-            for (0..sh) |row| {
+        pub fn blit(self: *Self, sprite: ase.Sprite, sx: i32, sy: i32) void {
+            self.blit_frame(sprite, 0, sx, sy);
+        }
+
+        /// Blit a specific frame from a sprite strip. Index 0 is transparent.
+        pub fn blit_frame(self: *Self, sprite: ase.Sprite, frame: u32, sx: i32, sy: i32) void {
+            const src_x = frame * sprite.width;
+            for (0..sprite.height) |row| {
                 const dy = sy + @as(i32, @intCast(row));
                 if (dy < 0 or dy >= h) continue;
                 const uy: u32 = @intCast(dy);
-                for (0..sw) |col| {
+                for (0..sprite.width) |col| {
                     const dx = sx + @as(i32, @intCast(col));
                     if (dx < 0 or dx >= w) continue;
-                    const idx = sprite[row * sw + col];
+                    const idx = sprite.pixels[row * sprite.strip_width + src_x + col];
                     if (idx == 0) continue;
                     const ux: u32 = @intCast(dx);
                     self.px[uy * w + ux] = idx;
@@ -101,13 +110,12 @@ pub fn GraphicsWith(comptime w: u32, comptime h: u32) type {
 
         /// Render text using 8x8 bitmap font. 8px char advance.
         pub fn text(self: *Self, str: []const u8, tx: i32, ty: i32, color: u8) void {
-            const font = @import("font.zig");
             var cx = tx;
             for (str) |ch| {
-                if (font.glyph(ch)) |g| {
-                    for (0..font.char_h) |row| {
+                if (font_mod.glyph(ch)) |g| {
+                    for (0..font_mod.char_h) |row| {
                         const bits = g[row];
-                        for (0..font.char_w) |col| {
+                        for (0..font_mod.char_w) |col| {
                             if (bits & (@as(u8, 0x80) >> @intCast(col)) != 0) {
                                 const px_x = cx + @as(i32, @intCast(col));
                                 const px_y = ty + @as(i32, @intCast(row));
@@ -119,7 +127,7 @@ pub fn GraphicsWith(comptime w: u32, comptime h: u32) type {
                         }
                     }
                 }
-                cx += font.char_w;
+                cx += font_mod.char_w;
             }
         }
 
@@ -158,10 +166,10 @@ test "set_pixel out of bounds is no-op" {
 }
 
 test "blit sprite onto framebuffer" {
+    const ase = @import("ase.zig");
     var gfx: GraphicsWith(4, 4) = .{};
-    // 2x2 sprite: index 0 is transparent
-    const sprite = [_]u8{ 1, 0, 0, 2 };
-    gfx.blit(&sprite, 1, 1, 2, 2);
+    const sprite = ase.Sprite{ .width = 2, .height = 2, .strip_width = 2, .pixels = &.{ 1, 0, 0, 2 } };
+    gfx.blit(sprite, 1, 1);
     try std.testing.expectEqual(@as(u8, 1), gfx.px[1 * 4 + 1]);
     try std.testing.expectEqual(@as(u8, 0), gfx.px[1 * 4 + 2]); // transparent, unchanged
     try std.testing.expectEqual(@as(u8, 0), gfx.px[2 * 4 + 1]); // transparent
@@ -169,13 +177,31 @@ test "blit sprite onto framebuffer" {
 }
 
 test "blit clips to bounds" {
+    const ase = @import("ase.zig");
     var gfx: GraphicsWith(4, 4) = .{};
-    const sprite = [_]u8{ 1, 2, 3, 4 };
-    gfx.blit(&sprite, 3, 3, 2, 2); // only top left pixel visible
+    const sprite = ase.Sprite{ .width = 2, .height = 2, .strip_width = 2, .pixels = &.{ 1, 2, 3, 4 } };
+    gfx.blit(sprite, 3, 3); // only top left pixel visible
     try std.testing.expectEqual(@as(u8, 1), gfx.px[3 * 4 + 3]);
     // Negative position
-    gfx.blit(&sprite, -1, -1, 2, 2); // only bottom right pixel visible
+    gfx.blit(sprite, -1, -1); // only bottom right pixel visible
     try std.testing.expectEqual(@as(u8, 4), gfx.px[0 * 4 + 0]);
+}
+
+test "blit_frame selects correct frame from strip" {
+    const ase = @import("ase.zig");
+    var gfx: GraphicsWith(4, 4) = .{};
+    // 2-frame strip: frame 0 = [1,2,3,4], frame 1 = [5,6,7,8], each 2x2
+    const sprite = ase.Sprite{
+        .width = 2,
+        .height = 2,
+        .strip_width = 4,
+        .pixels = &.{ 1, 2, 5, 6, 3, 4, 7, 8 },
+    };
+    gfx.blit_frame(sprite, 1, 0, 0);
+    try std.testing.expectEqual(@as(u8, 5), gfx.px[0]);
+    try std.testing.expectEqual(@as(u8, 6), gfx.px[1]);
+    try std.testing.expectEqual(@as(u8, 7), gfx.px[4]);
+    try std.testing.expectEqual(@as(u8, 8), gfx.px[5]);
 }
 
 test "rect fills correct pixels" {
