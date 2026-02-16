@@ -127,7 +127,7 @@ pub const Game = struct {
         entity.render(gfx, arawn_spr, stone_spr);
 
         // Player
-        gfx.blit(player_spr, state.player.screen_x(), state.player.screen_y());
+        gfx.blit_frame(player_spr, state.player.frame(player_spr), state.player.screen_x(), state.player.screen_y());
 
         // Dialogue box
         if (state.mode == .dialogue or state.mode == .choice) {
