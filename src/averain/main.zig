@@ -1,6 +1,10 @@
 const orb = @import("orb");
+const map = @import("map.zig");
+const player_mod = @import("player.zig");
+const entity = @import("entity.zig");
+const dialogue = @import("dialogue.zig");
 
-/// Averain game cartridge. Bouncing sprite demo with dpad menu.
+/// Averain game cartridge. Pwyll's Forest vertical slice.
 pub const Game = struct {
     pub const resolution = orb.Resolution.@"320x180";
     pub const width = resolution.width();
@@ -9,78 +13,130 @@ pub const Game = struct {
     pub const window_height: u32 = 720;
 
     const pal = orb.gpl.parse(@embedFile("assets/palette.gpl"));
-    const sprite = orb.ase.parse(@embedFile("assets/player.ase"));
+    const player_spr = orb.ase.parse(@embedFile("assets/player.ase"));
+    const tiles = orb.ase.parse(@embedFile("assets/tiles.ase"));
+    const arawn_spr = orb.ase.parse(@embedFile("assets/arawn.ase"));
+    const stone_spr = orb.ase.parse(@embedFile("assets/stone.ase"));
 
     pub const transparent = 0;
     pub const black = 1;
-    pub const white = 2;
-    pub const red = 3;
+    pub const light_grey = 2;
+    pub const purple = 3;
+    pub const dark_green = 4;
+    pub const dark_grey = 5;
+    pub const indigo = 6;
+    pub const brown = 7;
+    pub const dark_blue = 8;
+    pub const white = 9;
+    pub const red = 10;
+    pub const gold = 11;
 
-    x: i32 = 112,
-    y: i32 = 72,
-    dx: i32 = 1,
-    dy: i32 = 1,
-    tick: u8 = 0,
-    menu: orb.ui.Menu(4) = .{ .count = 0 },
-    menu_open: bool = false,
+    const Mode = enum(u2) { explore, dialogue, choice };
 
+    const Flags = packed struct {
+        examined_stone: bool = false,
+        chose_exchange: bool = false,
+        _pad: u6 = 0,
+    };
+
+    player: player_mod.Player,
+    mode: Mode = .explore,
+    box: dialogue.Box = .{},
+    choice_menu: orb.ui.Menu(2) = .{ .count = 0 },
+    flags: Flags = .{},
+
+    /// Create initial game state. Player spawns on the path at bottom.
     pub fn init() Game {
-        return .{};
+        return .{ .player = player_mod.Player.init(9, 7) };
     }
 
+    /// Advance game logic one tick.
     pub fn update(state: *Game, input: orb.InputState) void {
-        if (state.menu_open) {
-            if (state.menu.update(input)) |result| {
-                switch (result) {
-                    .selected, .cancelled => {
-                        state.menu_open = false;
-                    },
-                }
-            }
-            return;
-        }
-
-        if (input.pressed.start) {
-            state.menu = orb.ui.Menu(4).init(&.{ "Attack", "Magic", "Item", "Stay" });
-            state.menu_open = true;
-            return;
-        }
-
-        if (input.held.left) state.dx = -1;
-        if (input.held.right) state.dx = 1;
-        if (input.held.up) state.dy = -1;
-        if (input.held.down) state.dy = 1;
-
-        state.tick +%= 1;
-        if (state.tick % 3 != 0) return;
-
-        state.x += state.dx;
-        state.y += state.dy;
-
-        if (state.x <= 0) {
-            state.x = 0;
-            state.dx = 1;
-        }
-        if (state.x >= @as(i32, width - sprite.width)) {
-            state.x = @intCast(width - sprite.width);
-            state.dx = -1;
-        }
-        if (state.y <= 0) {
-            state.y = 0;
-            state.dy = 1;
-        }
-        if (state.y >= @as(i32, height - sprite.height)) {
-            state.y = @intCast(height - sprite.height);
-            state.dy = -1;
+        switch (state.mode) {
+            .explore => state.explore(input),
+            .dialogue => state.do_dialogue(input),
+            .choice => state.do_choice(input),
         }
     }
 
+    fn explore(state: *Game, input: orb.InputState) void {
+        state.player.update(input, &entity.is_blocked);
+
+        if (input.pressed.a and state.player.walk_timer == 0) {
+            const target = state.player.facing_tile();
+            if (entity.at(target[0], target[1])) |idx| {
+                const e = &entity.entities[idx];
+                var start_node = e.dialogue_id;
+                // Arawn stone-aware variant
+                if (idx == 0 and state.flags.examined_stone) {
+                    start_node = 7;
+                }
+                state.box.start(start_node);
+                state.mode = .dialogue;
+            }
+        }
+    }
+
+    fn do_dialogue(state: *Game, input: orb.InputState) void {
+        if (state.box.update(input)) |ev| {
+            switch (ev) {
+                .show_choice => {
+                    const n = &dialogue.nodes[state.box.node];
+                    if (n.choice) |c| {
+                        state.choice_menu = orb.ui.Menu(2).init(&c.labels);
+                        state.mode = .choice;
+                    }
+                },
+                .set_flag => |flag| {
+                    if (flag == 0) state.flags.examined_stone = true;
+                    if (flag == 1) state.flags.chose_exchange = true;
+                    if (!state.box.active()) state.mode = .explore;
+                },
+                .closed => {
+                    state.mode = .explore;
+                },
+            }
+        }
+    }
+
+    fn do_choice(state: *Game, input: orb.InputState) void {
+        if (state.choice_menu.update(input)) |result| {
+            switch (result) {
+                .selected => |sel| {
+                    const n = &dialogue.nodes[state.box.node];
+                    if (n.choice) |c| {
+                        if (sel == 0) state.flags.chose_exchange = true;
+                        state.box.start(c.targets[sel]);
+                        state.mode = .dialogue;
+                    }
+                },
+                .cancelled => {},
+            }
+        }
+    }
+
+    /// Draw the current frame.
     pub fn render(state: *Game, gfx: *orb.Graphics) void {
         gfx.pal = pal;
         gfx.clear(black);
-        gfx.blit(sprite.pixels, state.x, state.y, sprite.width, sprite.height);
-        if (state.menu_open) {
-            state.menu.draw(gfx, 8, 8, black, white, white, red);
+
+        // Tilemap
+        map.render(gfx, tiles);
+
+        // Entities
+        entity.render(gfx, arawn_spr, stone_spr);
+
+        // Player
+        gfx.blit(player_spr, state.player.screen_x(), state.player.screen_y());
+
+        // Dialogue box
+        if (state.mode == .dialogue or state.mode == .choice) {
+            state.box.draw(gfx, black, light_grey, white);
+        }
+
+        // Choice menu
+        if (state.mode == .choice) {
+            state.choice_menu.draw(gfx, 8, 120, black, light_grey, white, gold);
         }
     }
 };

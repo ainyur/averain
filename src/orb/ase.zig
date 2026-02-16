@@ -30,6 +30,8 @@ const frh_old_chunks = 6;
 const frh_new_chunks = 12;
 
 // Cel chunk field offsets (relative to chunk data start, after chunk header).
+const cel_x_off = 2;
+const cel_y_off = 4;
 const cel_type_off = 7;
 const cel_width_off = 16;
 const cel_height_off = 18;
@@ -51,6 +53,7 @@ pub const Sprite = struct {
 /// Multi-frame files are laid out as a horizontal strip.
 pub fn parse(comptime data: []const u8) Sprite {
     comptime {
+        @setEvalBranchQuota(data.len * 10);
         if (data.len < file_header_size) @compileError("ase file too short");
         if (read16(data, fh_magic) != 0xA5E0) @compileError("bad ase magic");
 
@@ -84,14 +87,16 @@ pub fn parse(comptime data: []const u8) Sprite {
 
                 if (chunk_type == 0x2005) {
                     const chunk_data = data[chunk_pos + chunk_header_size .. chunk_pos + chunk_size];
-                    const frame_pixels = parse_cel(chunk_data, frame_w, frame_h);
+                    const cel = parse_cel(chunk_data);
 
                     const x_off = frame_idx * frame_w;
-                    for (0..frame_h) |y| {
-                        const src_row = y * frame_w;
-                        const dst_row = y * strip_w + x_off;
-                        for (0..frame_w) |x| {
-                            strip[dst_row + x] = frame_pixels[src_row + x];
+                    for (0..cel.h) |cy| {
+                        const dy = @as(usize, @intCast(@as(i32, cel.oy) + @as(i32, @intCast(cy))));
+                        if (dy >= frame_h) continue;
+                        for (0..cel.w) |cx| {
+                            const dx = @as(usize, @intCast(@as(i32, cel.ox) + @as(i32, @intCast(cx))));
+                            if (dx >= frame_w) continue;
+                            strip[(dy * strip_w) + x_off + dx] = cel.pixels[cy * cel.w + cx];
                         }
                     }
                     break;
@@ -113,26 +118,41 @@ pub fn parse(comptime data: []const u8) Sprite {
     }
 }
 
-fn parse_cel(
-    comptime data: []const u8,
-    comptime expected_w: u16,
-    comptime expected_h: u16,
-) []const u8 {
+const Cel = struct {
+    ox: i16,
+    oy: i16,
+    w: usize,
+    h: usize,
+    pixels: []const u8,
+};
+
+fn parse_cel(comptime data: []const u8) Cel {
     comptime {
         const cel_type = read16(data, cel_type_off);
         const cel_w = read16(data, cel_width_off);
         const cel_h = read16(data, cel_height_off);
         const pixel_count = @as(usize, cel_w) * cel_h;
-
-        if (cel_w != expected_w or cel_h != expected_h)
-            @compileError("cel dimensions do not match frame dimensions");
+        const ox: i16 = @bitCast(read16(data, cel_x_off));
+        const oy: i16 = @bitCast(read16(data, cel_y_off));
 
         if (cel_type == 0) {
-            return data[cel_header_size .. cel_header_size + pixel_count];
+            return .{
+                .ox = ox,
+                .oy = oy,
+                .w = cel_w,
+                .h = cel_h,
+                .pixels = data[cel_header_size .. cel_header_size + pixel_count],
+            };
         } else if (cel_type == 2) {
             const compressed = data[cel_header_size..];
             const pixels = deflate.zlib(compressed, pixel_count);
-            return &pixels;
+            return .{
+                .ox = ox,
+                .oy = oy,
+                .w = cel_w,
+                .h = cel_h,
+                .pixels = &pixels,
+            };
         } else {
             @compileError("unsupported cel type (only raw and compressed supported)");
         }
