@@ -1,30 +1,33 @@
-/// Forest tilemap. 16x16 tiles on a 20x9 grid (320x144px).
-/// Bottom 36px reserved for dialogue box.
+/// Forest tilemap. 16x16 tiles on a 20x12 grid (320x192px).
 const orb = @import("orb");
 
-pub const tile_size = 16;
-pub const map_w = 20;
-pub const map_h = 9;
-pub const tile_count = 12;
+/// Tile dimensions in pixels.
+pub const TILE_SIZE = 16;
+/// Map width in tiles.
+pub const MAP_W = 20;
+/// Map height in tiles.
+pub const MAP_H = 12;
+/// Number of distinct tile types in the tilesheet.
+pub const TILE_COUNT = 12;
 
 /// Tile type indices matching tilesheet column order.
 pub const Tile = struct {
-    pub const empty = 0;
-    pub const ground = 1;
-    pub const grass_sparse = 2;
-    pub const grass_dense = 3;
-    pub const tree_full = 4;
-    pub const tree_top = 5;
-    pub const tree_base = 6;
-    pub const path = 7;
-    pub const stone = 8;
-    pub const water = 9;
-    pub const cliff = 10;
-    pub const ground_alt = 11;
+    pub const EMPTY = 0;
+    pub const GROUND = 1;
+    pub const GRASS_SPARSE = 2;
+    pub const GRASS_DENSE = 3;
+    pub const TREE_FULL = 4;
+    pub const TREE_TOP = 5;
+    pub const TREE_BASE = 6;
+    pub const PATH = 7;
+    pub const STONE = 8;
+    pub const WATER = 9;
+    pub const CLIFF = 10;
+    pub const GROUND_ALT = 11;
 };
 
 /// Whether each tile type blocks movement.
-pub const solid = [tile_count]bool{
+pub const SOLID = [TILE_COUNT]bool{
     false, // empty
     false, // ground
     false, // grass_sparse
@@ -42,19 +45,19 @@ pub const solid = [tile_count]bool{
 // T = tree_full, t = tree_top, b = tree_base
 // G = ground, g = grass_sparse, d = grass_dense
 // P = path, W = water, S = stone, C = cliff
-const T = Tile.tree_full;
-const t = Tile.tree_top;
-const b = Tile.tree_base;
-const G = Tile.ground;
-const g = Tile.grass_sparse;
-const d = Tile.grass_dense;
-const P = Tile.path;
-const W = Tile.water;
-const S = Tile.stone;
-const C = Tile.cliff;
+const T = Tile.TREE_FULL;
+const t = Tile.TREE_TOP;
+const b = Tile.TREE_BASE;
+const G = Tile.GROUND;
+const g = Tile.GRASS_SPARSE;
+const d = Tile.GRASS_DENSE;
+const P = Tile.PATH;
+const W = Tile.WATER;
+const S = Tile.STONE;
+const C = Tile.CLIFF;
 
-/// Map tile data. 20 columns x 9 rows.
-pub const data = [map_w * map_h]u8{
+/// Map tile data. 20 columns x 12 rows.
+pub const DATA = [MAP_W * MAP_H]u8{
     // Row 0: dense tree border at top
     T, T, T, t, t, t, T, T, T, T, T, T, T, t, t, t, T, T, T, T,
     // Row 1: trees with path opening
@@ -71,26 +74,25 @@ pub const data = [map_w * map_h]u8{
     T, T, b, d, g, d, b, T, g, P, P, g, T, b, d, g, d, W, W, T,
     // Row 7: closing toward bottom
     T, T, T, b, d, b, T, T, T, P, P, T, T, T, b, d, b, T, T, T,
-    // Row 8: player spawn row, dense trees
+    // Row 8: dense trees, path continues
     T, T, T, T, T, T, T, T, T, P, P, T, T, T, T, T, T, T, T, T,
+    // Row 9: path widens at south entrance
+    T, T, T, T, T, b, T, T, g, P, P, g, T, T, b, T, T, T, T, T,
+    // Row 10: player spawn row
+    T, T, T, T, T, T, T, T, T, P, P, T, T, T, T, T, T, T, T, T,
+    // Row 11: dense tree border at bottom
+    T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T,
 };
 
 /// Check if a tile at grid coords is solid.
 pub fn is_solid(tx: u8, ty: u8) bool {
-    if (tx >= map_w or ty >= map_h) return true;
-    const idx = data[@as(usize, ty) * map_w + tx];
-    if (idx >= tile_count) return true;
-    return solid[idx];
+    if (tx >= MAP_W or ty >= MAP_H) return true;
+    const idx = DATA[@as(usize, ty) * MAP_W + tx];
+    if (idx >= TILE_COUNT) return true;
+    return SOLID[idx];
 }
 
 /// Render the tilemap to the framebuffer.
 pub fn render(gfx: *orb.Graphics, sheet: orb.ase.Sprite) void {
-    for (0..map_h) |row| {
-        for (0..map_w) |col| {
-            const tile_idx = data[row * map_w + col];
-            const dst_x: i32 = @intCast(col * tile_size);
-            const dst_y: i32 = @intCast(row * tile_size);
-            gfx.blit_frame(sheet, tile_idx, dst_x, dst_y);
-        }
-    }
+    orb.tilemap.render(gfx, &DATA, MAP_W, MAP_H, TILE_SIZE, sheet);
 }

@@ -6,35 +6,39 @@ const deflate = @import("deflate.zig");
 
 // .ase binary layout sizes and offsets.
 
-const file_header_size = 128;
-const frame_header_size = 16;
-const chunk_header_size = 6;
+const FILE_HEADER_SIZE = 128;
+const FRAME_HEADER_SIZE = 16;
+const CHUNK_HEADER_SIZE = 6;
 
 /// Cel chunk data before the w/h/pixel fields:
 /// layer(2) + x(2) + y(2) + opacity(1) + type(2) + z_index(2) + reserved(5).
-const cel_preamble_size = 16;
+const CEL_PREAMBLE_SIZE = 16;
 
 /// Full cel header before pixel data: preamble(16) + width(2) + height(2).
-const cel_header_size = cel_preamble_size + 4;
+const CEL_HEADER_SIZE = CEL_PREAMBLE_SIZE + 4;
 
 // File header field offsets.
-const fh_magic = 4;
-const fh_frames = 6;
-const fh_width = 8;
-const fh_height = 10;
-const fh_depth = 12;
+const FH_MAGIC = 4;
+const FH_FRAMES = 6;
+const FH_WIDTH = 8;
+const FH_HEIGHT = 10;
+const FH_DEPTH = 12;
 
 // Frame header field offsets (relative to frame start).
-const frh_magic = 4;
-const frh_old_chunks = 6;
-const frh_new_chunks = 12;
+const FRH_MAGIC = 4;
+const FRH_OLD_CHUNKS = 6;
+const FRH_NEW_CHUNKS = 12;
+
+// Layer chunk field offsets (relative to chunk data start, after chunk header).
+const LAYER_FLAGS_OFF = 0;
 
 // Cel chunk field offsets (relative to chunk data start, after chunk header).
-const cel_x_off = 2;
-const cel_y_off = 4;
-const cel_type_off = 7;
-const cel_width_off = 16;
-const cel_height_off = 18;
+const CEL_LAYER_OFF = 0;
+const CEL_X_OFF = 2;
+const CEL_Y_OFF = 4;
+const CEL_TYPE_OFF = 7;
+const CEL_WIDTH_OFF = 16;
+const CEL_HEIGHT_OFF = 18;
 
 /// Parsed sprite data: dimensions and palette index pixels.
 /// For multi-frame files, pixels form a horizontal strip of all frames.
@@ -51,55 +55,53 @@ pub const Sprite = struct {
 
 /// Parse an embedded .ase file at comptime. Returns sprite pixel indices.
 /// Multi-frame files are laid out as a horizontal strip.
+/// Hidden layers are skipped; visible layers are composited bottom-to-top.
 pub fn parse(comptime data: []const u8) Sprite {
     comptime {
         @setEvalBranchQuota(data.len * 10);
-        if (data.len < file_header_size) @compileError("ase file too short");
-        if (read16(data, fh_magic) != 0xA5E0) @compileError("bad ase magic");
+        if (data.len < FILE_HEADER_SIZE) @compileError("ase file too short");
+        if (read16(data, FH_MAGIC) != 0xA5E0) @compileError("bad ase magic");
 
-        const num_frames = read16(data, fh_frames);
-        const frame_w = read16(data, fh_width);
-        const frame_h = read16(data, fh_height);
+        const num_frames = read16(data, FH_FRAMES);
+        const frame_w = read16(data, FH_WIDTH);
+        const frame_h = read16(data, FH_HEIGHT);
 
-        if (read16(data, fh_depth) != 8)
+        if (read16(data, FH_DEPTH) != 8)
             @compileError("only indexed (8bpp) sprites supported");
         if (num_frames == 0) @compileError("ase file has 0 frames");
+
+        // Scan frame 0 for layer visibility.
+        const visible = scan_layers(data);
 
         const strip_w: usize = @as(usize, frame_w) * num_frames;
         var strip: [strip_w * frame_h]u8 = @splat(0);
 
-        var pos: usize = file_header_size;
+        var pos: usize = FILE_HEADER_SIZE;
         for (0..num_frames) |frame_idx| {
-            if (pos + frame_header_size > data.len)
+            if (pos + FRAME_HEADER_SIZE > data.len)
                 @compileError("missing frame header");
-            if (read16(data, pos + frh_magic) != 0xF1FA)
+            if (read16(data, pos + FRH_MAGIC) != 0xF1FA)
                 @compileError("bad frame magic");
 
             const frame_size = read32(data, pos);
-            const old_chunks = read16(data, pos + frh_old_chunks);
-            const new_chunks = read32(data, pos + frh_new_chunks);
+            const old_chunks = read16(data, pos + FRH_OLD_CHUNKS);
+            const new_chunks = read32(data, pos + FRH_NEW_CHUNKS);
             const num_chunks = if (new_chunks != 0) new_chunks else old_chunks;
 
-            var chunk_pos: usize = pos + frame_header_size;
+            var chunk_pos: usize = pos + FRAME_HEADER_SIZE;
             for (0..num_chunks) |_| {
                 const chunk_size = read32(data, chunk_pos);
                 const chunk_type = read16(data, chunk_pos + 4);
 
                 if (chunk_type == 0x2005) {
-                    const chunk_data = data[chunk_pos + chunk_header_size .. chunk_pos + chunk_size];
-                    const cel = parse_cel(chunk_data);
+                    const chunk_data = data[chunk_pos + CHUNK_HEADER_SIZE .. chunk_pos + chunk_size];
+                    const layer = read16(chunk_data, CEL_LAYER_OFF);
 
-                    const x_off = frame_idx * frame_w;
-                    for (0..cel.h) |cy| {
-                        const dy = @as(usize, @intCast(@as(i32, cel.oy) + @as(i32, @intCast(cy))));
-                        if (dy >= frame_h) continue;
-                        for (0..cel.w) |cx| {
-                            const dx = @as(usize, @intCast(@as(i32, cel.ox) + @as(i32, @intCast(cx))));
-                            if (dx >= frame_w) continue;
-                            strip[(dy * strip_w) + x_off + dx] = cel.pixels[cy * cel.w + cx];
-                        }
+                    if (visible.len == 0 or (layer < visible.len and visible[layer])) {
+                        const cel = parse_cel(chunk_data);
+                        const x_off = frame_idx * frame_w;
+                        blit_cel(&strip, strip_w, frame_w, frame_h, x_off, &cel);
                     }
-                    break;
                 }
 
                 chunk_pos += chunk_size;
@@ -118,6 +120,67 @@ pub fn parse(comptime data: []const u8) Sprite {
     }
 }
 
+/// Scan frame 0 chunks for layer visibility flags.
+fn scan_layers(comptime data: []const u8) []const bool {
+    comptime {
+        // Count layers.
+        var count: usize = 0;
+        var pos: usize = FILE_HEADER_SIZE + FRAME_HEADER_SIZE;
+        const old_chunks = read16(data, FILE_HEADER_SIZE + FRH_OLD_CHUNKS);
+        const new_chunks = read32(data, FILE_HEADER_SIZE + FRH_NEW_CHUNKS);
+        const num_chunks = if (new_chunks != 0) new_chunks else old_chunks;
+
+        for (0..num_chunks) |_| {
+            const chunk_size = read32(data, pos);
+            if (read16(data, pos + 4) == 0x2004) count += 1;
+            pos += chunk_size;
+        }
+
+        // Collect visibility (bit 0 of flags).
+        var visible: [count]bool = undefined;
+        var li: usize = 0;
+        pos = FILE_HEADER_SIZE + FRAME_HEADER_SIZE;
+        for (0..num_chunks) |_| {
+            const chunk_size = read32(data, pos);
+            if (read16(data, pos + 4) == 0x2004) {
+                const flags = read16(data, pos + CHUNK_HEADER_SIZE + LAYER_FLAGS_OFF);
+                visible[li] = (flags & 1) != 0;
+                li += 1;
+            }
+            pos += chunk_size;
+        }
+
+        const result = visible;
+        return &result;
+    }
+}
+
+/// Composite a cel onto the strip at the given x offset.
+fn blit_cel(
+    strip: anytype,
+    strip_w: usize,
+    frame_w: u16,
+    frame_h: u16,
+    x_off: usize,
+    cel: *const Cel,
+) void {
+    for (0..cel.h) |cy| {
+        const sy = @as(i32, cel.oy) + @as(i32, @intCast(cy));
+        if (sy < 0 or sy >= frame_h) continue;
+        const dy: usize = @intCast(sy);
+        for (0..cel.w) |cx| {
+            const sx = @as(i32, cel.ox) + @as(i32, @intCast(cx));
+            if (sx < 0 or sx >= frame_w) continue;
+            const dx: usize = @intCast(sx);
+            const pixel = cel.pixels[cy * cel.w + cx];
+            if (pixel != 0) {
+                strip[(dy * strip_w) + x_off + dx] = pixel;
+            }
+        }
+    }
+}
+
+/// Decoded cel: position offset and pixel data within a single frame.
 const Cel = struct {
     ox: i16,
     oy: i16,
@@ -126,43 +189,39 @@ const Cel = struct {
     pixels: []const u8,
 };
 
+/// Decode a cel chunk into offset, dimensions, and pixel data.
 fn parse_cel(comptime data: []const u8) Cel {
     comptime {
-        const cel_type = read16(data, cel_type_off);
-        const cel_w = read16(data, cel_width_off);
-        const cel_h = read16(data, cel_height_off);
+        const cel_type = read16(data, CEL_TYPE_OFF);
+        const cel_w = read16(data, CEL_WIDTH_OFF);
+        const cel_h = read16(data, CEL_HEIGHT_OFF);
         const pixel_count = @as(usize, cel_w) * cel_h;
-        const ox: i16 = @bitCast(read16(data, cel_x_off));
-        const oy: i16 = @bitCast(read16(data, cel_y_off));
 
-        if (cel_type == 0) {
-            return .{
-                .ox = ox,
-                .oy = oy,
-                .w = cel_w,
-                .h = cel_h,
-                .pixels = data[cel_header_size .. cel_header_size + pixel_count],
-            };
-        } else if (cel_type == 2) {
-            const compressed = data[cel_header_size..];
-            const pixels = deflate.zlib(compressed, pixel_count);
-            return .{
-                .ox = ox,
-                .oy = oy,
-                .w = cel_w,
-                .h = cel_h,
-                .pixels = &pixels,
-            };
-        } else {
-            @compileError("unsupported cel type (only raw and compressed supported)");
-        }
+        const pixels: []const u8 = switch (cel_type) {
+            0 => data[CEL_HEADER_SIZE .. CEL_HEADER_SIZE + pixel_count],
+            2 => blk: {
+                const decompressed = deflate.zlib(data[CEL_HEADER_SIZE..], pixel_count);
+                break :blk &decompressed;
+            },
+            else => @compileError("unsupported cel type (only raw and compressed supported)"),
+        };
+
+        return .{
+            .ox = @bitCast(read16(data, CEL_X_OFF)),
+            .oy = @bitCast(read16(data, CEL_Y_OFF)),
+            .w = cel_w,
+            .h = cel_h,
+            .pixels = pixels,
+        };
     }
 }
 
+/// Read a little-endian u16 from data at offset.
 fn read16(data: []const u8, offset: usize) u16 {
     return @as(u16, data[offset]) | @as(u16, data[offset + 1]) << 8;
 }
 
+/// Read a little-endian u32 from data at offset.
 fn read32(data: []const u8, offset: usize) u32 {
     return @as(u32, data[offset]) |
         @as(u32, data[offset + 1]) << 8 |
@@ -170,10 +229,12 @@ fn read32(data: []const u8, offset: usize) u32 {
         @as(u32, data[offset + 3]) << 24;
 }
 
+/// Encode u16 as little-endian bytes. Used in test scaffolding.
 fn le16(val: u16) [2]u8 {
     return .{ @intCast(val & 0xFF), @intCast(val >> 8) };
 }
 
+/// Encode u32 as little-endian bytes. Used in test scaffolding.
 fn le32(val: u32) [4]u8 {
     return .{
         @intCast(val & 0xFF),
@@ -183,18 +244,19 @@ fn le32(val: u32) [4]u8 {
     };
 }
 
+/// Build a minimal .ase file header for testing.
 fn build_file_header(
     comptime num_frames: u16,
     comptime w: u16,
     comptime h: u16,
-) [file_header_size]u8 {
+) [FILE_HEADER_SIZE]u8 {
     return [_]u8{0} ** 4
         ++ le16(0xA5E0)
         ++ le16(num_frames)
         ++ le16(w)
         ++ le16(h)
         ++ le16(8) // indexed color depth
-        ++ [_]u8{0} ** (file_header_size - 14);
+        ++ [_]u8{0} ** (FILE_HEADER_SIZE - 14);
 }
 
 /// Build a minimal .ase frame block (frame header + one raw cel chunk).
@@ -202,16 +264,16 @@ fn build_frame(
     comptime w: u16,
     comptime h: u16,
     comptime pixels: *const [@as(usize, w) * h]u8,
-) [frame_header_size + chunk_header_size + cel_header_size + @as(usize, w) * h]u8 {
-    const cel_data = [_]u8{0} ** cel_preamble_size
+) [FRAME_HEADER_SIZE + CHUNK_HEADER_SIZE + CEL_HEADER_SIZE + @as(usize, w) * h]u8 {
+    const cel_data = [_]u8{0} ** CEL_PREAMBLE_SIZE
         ++ le16(w)
         ++ le16(h)
         ++ pixels.*;
-    const cel_chunk = le32(chunk_header_size + cel_data.len)
+    const cel_chunk = le32(CHUNK_HEADER_SIZE + cel_data.len)
         ++ le16(0x2005)
         ++ cel_data;
 
-    const frame = le32(frame_header_size + cel_chunk.len)
+    const frame = le32(FRAME_HEADER_SIZE + cel_chunk.len)
         ++ le16(0xF1FA) // magic
         ++ le16(1) // old chunks
         ++ le16(0) // duration

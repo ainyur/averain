@@ -110,10 +110,12 @@ pub fn zlib(comptime input: []const u8, comptime len: usize) [len]u8 {
     }
 }
 
+/// Huffman decoding table. Counts per bit length and sorted symbol array.
 const Table = struct {
     counts: [16]u16,
     symbols: [289]u16,
 
+    /// Decode next symbol from the bit stream.
     fn decode(self: *const Table, state: *State) u16 {
         var code: u16 = 0;
         var first: u16 = 0;
@@ -133,6 +135,7 @@ const Table = struct {
     }
 };
 
+/// Build a Huffman table from code lengths.
 fn build(comptime n: usize, lens: []const u4) Table {
     comptime {
         // Count codes per bit length
@@ -173,6 +176,7 @@ fn build(comptime n: usize, lens: []const u4) Table {
     }
 }
 
+/// Decode a single deflate block into the output buffer.
 fn decode_block(state: *State, ll: *const Table, dt: *const Table, out: []u8, out_pos: *usize) void {
     while (true) {
         const sym = ll.decode(state);
@@ -193,27 +197,31 @@ fn decode_block(state: *State, ll: *const Table, dt: *const Table, out: []u8, ou
     }
 }
 
-const len_base = [_]u16{ 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 };
-const len_extra = [_]u4{ 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 };
+const LEN_BASE = [_]u16{ 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 };
+const LEN_EXTRA = [_]u4{ 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 };
 
+/// Decode a length value from the bit stream.
 fn read_length(sym: u16, state: *State) usize {
     const idx = sym - 257;
-    return len_base[idx] + state.read(len_extra[idx]);
+    return LEN_BASE[idx] + state.read(LEN_EXTRA[idx]);
 }
 
-const dist_base = [_]u16{ 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577 };
-const dist_extra = [_]u4{ 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 };
+const DIST_BASE = [_]u16{ 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577 };
+const DIST_EXTRA = [_]u4{ 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 };
 
+/// Decode a distance value from the bit stream.
 fn read_distance(sym: u16, state: *State) usize {
-    return dist_base[sym] + state.read(dist_extra[sym]);
+    return DIST_BASE[sym] + state.read(DIST_EXTRA[sym]);
 }
 
+/// Bit stream reader for deflate decompression.
 const State = struct {
     input: []const u8,
     pos: usize = 0,
     bit_buf: u32 = 0,
     bit_count: u8 = 0,
 
+    /// Read n bits from the stream, LSB first.
     fn read(self: *State, n: u5) u32 {
         while (self.bit_count < n) {
             self.bit_buf |= @as(u32, self.input[self.pos]) << @intCast(self.bit_count);
@@ -228,6 +236,7 @@ const State = struct {
     }
 };
 
+/// Compute adler32 checksum for zlib verification.
 fn adler32(data: []const u8) u32 {
     var a: u32 = 1;
     var b: u32 = 0;

@@ -1,6 +1,7 @@
 /// Parse GIMP .gpl palette files at comptime.
 /// Supports Aseprite's RGBA extension (Channels: RGBA).
 pub fn parse(comptime data: []const u8) [256]u32 {
+    @setEvalBranchQuota(100000);
     comptime {
         var pal = [_]u32{0x000000FF} ** 256;
         var idx: usize = 0;
@@ -44,8 +45,10 @@ pub fn parse(comptime data: []const u8) [256]u32 {
     }
 }
 
+/// Parsed color component value and remaining unparsed text.
 const Component = struct { value: u8, rest: []const u8 };
 
+/// Parse one 0-255 integer from whitespace-delimited text.
 fn parse_component(s: []const u8) ?Component {
     // Skip leading whitespace
     var i: usize = 0;
@@ -61,6 +64,7 @@ fn parse_component(s: []const u8) ?Component {
     return .{ .value = @intCast(val), .rest = s[i..] };
 }
 
+/// Advance past the next newline, returning the position after it.
 fn skip_line(data: []const u8, start: usize) usize {
     var i = start;
     while (i < data.len and data[i] != '\n') i += 1;
@@ -68,11 +72,13 @@ fn skip_line(data: []const u8, start: usize) usize {
     return i;
 }
 
+/// Check if haystack begins with needle.
 fn starts_with(haystack: []const u8, needle: []const u8) bool {
     if (haystack.len < needle.len) return false;
     return eql(haystack[0..needle.len], needle);
 }
 
+/// Byte-wise string equality.
 fn eql(a: []const u8, b: []const u8) bool {
     if (a.len != b.len) return false;
     for (a, b) |ca, cb| {

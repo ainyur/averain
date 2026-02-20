@@ -1,14 +1,14 @@
 /// 8x8 bitmap font. Printable ASCII (32-126) with gothic character.
 /// Each glyph is 8 bytes, one per row, MSB is leftmost pixel.
 
-pub const char_w = 8;
-pub const char_h = 8;
+pub const CHAR_W = 8;
+pub const CHAR_H = 8;
 
 /// Right-pointing arrow for menu cursor selection.
-pub const cursor: [8]u8 = .{ 0x40, 0x60, 0x70, 0x78, 0x70, 0x60, 0x40, 0x00 };
+pub const CURSOR: [8]u8 = .{ 0x40, 0x60, 0x70, 0x78, 0x70, 0x60, 0x40, 0x00 };
 
 /// Glyph bitmap data for ASCII 32-126 (95 glyphs).
-pub const glyphs: [95][8]u8 = .{
+pub const GLYPHS: [95][8]u8 = .{
     .{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, // 32 ' '
     .{ 0x30, 0x30, 0x30, 0x30, 0x30, 0x00, 0x30, 0x00 }, // 33 '!'
     .{ 0x6C, 0x6C, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00 }, // 34 '"'
@@ -108,9 +108,9 @@ pub const glyphs: [95][8]u8 = .{
 
 /// Look up glyph data for a codepoint. Returns null for unsupported characters.
 pub fn glyph(cp: u8) ?*const [8]u8 {
-    if (cp == 0x10) return &cursor;
+    if (cp == 0x10) return &CURSOR;
     if (cp < 32 or cp > 126) return null;
-    return &glyphs[cp - 32];
+    return &GLYPHS[cp - 32];
 }
 
 const std = @import("std");

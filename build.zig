@@ -22,11 +22,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     game_mod.addImport("orb", orb_mod);
-    orb_mod.addImport("game", game_mod);
 
     const exe = b.addExecutable(.{
         .name = "averain",
-        .root_module = orb_mod,
+        .root_module = game_mod,
     });
     b.installArtifact(exe);
 
