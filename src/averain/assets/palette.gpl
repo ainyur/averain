@@ -2,6 +2,258 @@ GIMP Palette
 Channels: RGBA
 #
   0   0   0   0 Transparent
- 21  21  21 255 Black
-254 254 254 255 White
-204  36  29 255 Red
+  0   0   0 255 Black
+ 52  52  52 255 Charcoal
+ 52  52  87 255 Blue Shade
+ 87  52  52 255 Warm Shade
+ 87  52  87 255 Violet Shade
+ 52  87  52 255 Green Shade
+ 52  87  87 255 Teal Shade
+ 87  87  87 255 Dark Gray
+ 87  87 116 255 Cool Gray
+116 116  87 255 Warm Gray
+116 116 116 255 Gray
+144 144 144 255 Light Gray
+172 172 172 255 Silver
+206 206 206 255 Pale
+255 255 255 255 White
+ 87  52   0 255 Peat
+116  52   0 255 Dark Brown
+144  52   0 255 Brown
+116  87  52 255 Raw Umber
+144  87   0 255 Dark Ochre
+144  87  52 255 Burnt Umber
+172  87   0 255 Ochre
+172  87  52 255 Sienna
+144 116  87 255 Muted Tan
+172 116  52 255 Dark Tan
+172 116  87 255 Tan
+172 144  87 255 Sand
+206 144  87 255 Light Sand
+206 172 116 255 Pale Sand
+206 172 144 255 Cream
+206 206 172 255 Pale Cream
+ 52   0   0 255 Darkest Blood
+ 87   0   0 255 Dark Blood
+116   0   0 255 Blood
+144   0   0 255 Crimson
+172   0   0 255 Dark Red
+206   0   0 255 Red
+116  52  52 255 Muted Crimson
+144  52  52 255 Dark Rose
+172  52  52 255 Warm Crimson
+206  52  52 255 Bright Crimson
+144  87  87 255 Dusty Rose
+172  87  87 255 Muted Rose
+206  87  87 255 Salmon
+172 116 116 255 Pale Rose
+206 116 116 255 Light Salmon
+206 144 144 255 Lightest Rose
+172  52   0 255 Dark Ember
+206  52   0 255 Ember
+255  52   0 255 Bright Ember
+206  87   0 255 Dark Torch
+206  87  52 255 Warm Torch
+255  87   0 255 Torch
+255  87  52 255 Bright Torch
+206 116  52 255 Dark Flame
+206 116  87 255 Muted Flame
+255 116   0 255 Flame
+255 116  52 255 Bright Flame
+255 144   0 255 Fire
+255 144  52 255 Light Fire
+255 144  87 255 Pale Fire
+255 172  87 255 Light Amber
+255 172 116 255 Pale Amber
+ 52  52   0 255 Darkest Gold
+ 87  87   0 255 Dark Gold
+ 87  87  52 255 Tarnished Gold
+116 116   0 255 Old Gold
+116 116  52 255 Muted Gold
+144 144   0 255 Gold
+144 144  52 255 Warm Gold
+144 144  87 255 Wheat
+172 172   0 255 Bright Gold
+172 172  52 255 Light Gold
+172 172  87 255 Light Wheat
+206 172   0 255 Deep Yellow
+206 206   0 255 Yellow
+206 206  52 255 Light Yellow
+206 206  87 255 Pale Yellow
+206 206 116 255 Cream Yellow
+ 52  87   0 255 Dark Olive
+ 52 116   0 255 Deep Olive
+ 87 116   0 255 Olive Shadow
+ 87 116  52 255 Muted Olive
+ 87 144   0 255 Dark Sage
+ 87 144  52 255 Mossy
+116 144   0 255 Olive
+116 144  52 255 Warm Moss
+116 144  87 255 Sage
+116 172   0 255 Green Gold
+144 172   0 255 Yellow Green
+144 172  52 255 Light Moss
+172 206   0 255 Chartreuse
+144 206  87 255 Light Sage
+172 206  52 255 Light Chartreuse
+172 206  87 255 Pale Sage
+  0  52   0 255 Deepest Forest
+  0  87   0 255 Dark Forest
+  0 116   0 255 Forest
+  0 116  52 255 Forest Floor
+  0 144   0 255 Deep Green
+ 52 116  52 255 Forest Green
+  0 172   0 255 Green
+ 52 144  52 255 Fern
+  0 172  52 255 Bright Fern
+ 87 144  87 255 Moss
+  0 206   0 255 Vivid Green
+ 52 172  87 255 Mossy Fern
+ 87 172  87 255 Spring
+ 52 206  52 255 Light Fern
+116 172 116 255 Pale Sage Green
+ 87 206  87 255 Light Spring
+  0  52  52 255 Deep Sea
+  0  87  87 255 Dark Teal
+  0 116 116 255 Teal
+ 52 116 116 255 Muted Teal
+  0 144 144 255 Deep Cyan
+ 52 144 144 255 Cyan
+  0 172 172 255 Bright Teal
+ 87 144 144 255 Muted Cyan
+ 52 172 172 255 Light Teal
+  0 206 206 255 Vivid Cyan
+ 87 172 172 255 Pale Teal
+116 172 172 255 Silver Teal
+ 52 206 206 255 Light Cyan
+ 87 206 206 255 Pale Cyan
+  0 255 255 255 Bright Ice
+116 206 206 255 Ice
+  0   0  52 255 Abyss
+  0   0  87 255 Deep Night
+  0   0 116 255 Midnight
+  0   0 144 255 Dark Navy
+  0   0 172 255 Navy
+  0   0 206 255 Royal Blue
+  0   0 255 255 True Blue
+ 52  52 116 255 Slate Blue
+ 52  52 144 255 Blue
+ 52  52 172 255 Mid Blue
+ 87  87 144 255 Blue Gray
+ 87  87 172 255 Periwinkle
+ 87  87 206 255 Sky
+116 116 172 255 Light Slate
+116 116 206 255 Pale Slate
+144 144 206 255 Pale Blue
+ 52   0  52 255 Deepest Violet
+ 52   0  87 255 Dark Indigo
+ 87   0  87 255 Dark Violet
+ 87   0 116 255 Deep Indigo
+116   0 116 255 Deep Purple
+116   0 172 255 Purple
+144   0 144 255 Royal Purple
+ 87  52 116 255 Amethyst Shadow
+116  52 144 255 Amethyst
+144  52 144 255 Dark Orchid
+172  52 172 255 Orchid
+116  87 144 255 Muted Amethyst
+144  87 172 255 Violet
+172  87 172 255 Light Orchid
+172 116 172 255 Mauve
+172 144 206 255 Lavender
+ 87   0  52 255 Darkest Magenta
+116   0  52 255 Dark Magenta
+144   0  87 255 Deep Magenta
+172   0  87 255 Magenta Shadow
+172   0 116 255 Magenta
+206   0  87 255 Dark Pink
+144  52  87 255 Muted Magenta
+172  52  87 255 Warm Magenta
+172  52 116 255 Rose
+206  52  87 255 Bright Rose
+172  87 116 255 Dusty Magenta
+172  87 144 255 Muted Orchid
+206  87 116 255 Salmon Rose
+172 116 144 255 Pale Mauve
+206 116 144 255 Light Rose
+206 144 172 255 Lightest Rose
+116  52  87 255 Dark Warm Shadow
+116  87  87 255 Warm Shadow
+144  87 116 255 Mauve Flesh
+144 116 116 255 Skin Shadow
+144 144 116 255 Warm Cloth
+172 144 116 255 Warm Skin
+172 144 144 255 Muted Skin
+172 144 172 255 Warm Mauve
+206 144 116 255 Light Skin
+255 144 144 255 Flushed
+206 172 172 255 Pale Skin
+255 172 144 255 Warm Highlight
+255 172 172 255 Pink Light
+206 206 144 255 Warm Cream
+255 206 172 255 Warm Glow
+255 206 206 255 Palest Warm
+ 52  87 116 255 Dark Cool Shadow
+116  87 116 255 Cool Mauve
+ 87 116 116 255 Cool Steel
+ 87 116 144 255 Steel Shadow
+116 116 144 255 Cool Stone
+116 144 144 255 Steel
+116 144 172 255 Cool Slate
+144 144 172 255 Cool Silver
+144 172 172 255 Moonlit Stone
+144 172 206 255 Moonlit Blue
+172 172 206 255 Pale Moonlit
+172 172 255 255 Light Moonlit
+206 172 206 255 Cool Bloom
+172 206 206 255 Pale Ice
+172 206 255 255 Light Ice
+206 206 255 255 Palest Cool
+ 87 116  87 255 Dark Sage
+116 144 116 255 Sage
+ 87 172 116 255 Dark Verdigris
+116 172 144 255 Verdigris
+144 172 116 255 Warm Sage
+ 87 206 116 255 Spring Sage
+144 172 144 255 Muted Sage
+172 172 116 255 Dry Grass
+116 206 116 255 Bright Sage
+144 206 144 255 Light Sage
+144 206 172 255 Light Verdigris
+172 206 144 255 Pale Sage
+172 206 172 255 Pale Green
+172 255 172 255 Mint
+206 255 172 255 Light Mint
+206 255 206 255 Palest Sage
+ 52   0 116 255 Shadow Indigo
+ 52   0 172 255 Shadow Violet
+  0  52  87 255 Shadow Steel
+ 87   0 144 255 Shadow Amethyst
+116   0  87 255 Shadow Orchid
+144   0  52 255 Shadow Blood
+ 87   0 206 255 Shadow Blue
+  0  52 172 255 Shadow Sapphire
+144   0 116 255 Shadow Magenta
+  0  87  52 255 Shadow Emerald
+172   0  52 255 Shadow Garnet
+116   0 206 255 Shadow Royal
+  0  87 116 255 Shadow Aqua
+144   0 206 255 Shadow Purple
+  0  87 172 255 Shadow Cobalt
+  0  87 206 255 Shadow Night
+255   0   0 255 Pure Red
+255   0  52 255 Ruby
+206   0 255 255 Arcane Purple
+255   0 255 255 Magenta Burst
+  0 144 255 255 Electric Blue
+ 52 144 206 255 Sapphire Glow
+  0 206 144 255 Emerald Glow
+  0 255   0 255 Nature Magic
+  0 206 255 255 Cerulean
+255  87 255 255 Fae Pink
+  0 255  87 255 Spring Magic
+255 206   0 255 Divine Gold
+ 87 255 255 255 Ice Crystal
+255 255   0 255 Solar Flare
+255 255  87 255 Holy Light
+206 255 255 255 Ethereal

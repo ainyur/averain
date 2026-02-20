@@ -1,93 +1,62 @@
-/// Player character. Grid-based movement with smooth tile-to-tile sliding.
+/// Player character. Wraps orb grid walker with game-specific sprite logic.
 const orb = @import("orb");
-const map = @import("map.zig");
+const Dir = orb.grid.Dir;
+const GridWalker = orb.grid.Walker(.{ .tile_size = @import("map.zig").TILE_SIZE });
+const Sprite = orb.ase.Sprite;
 
 pub const Player = struct {
-    tile_x: u8,
-    tile_y: u8,
-    px_x: i16 = 0,
-    px_y: i16 = 0,
-    facing: Dir = .down,
-    walk_timer: u8 = 0,
-
-    pub const Dir = enum(u2) { down, up, left, right };
-    const walk_frames = 8;
-    const step: i16 = @divExact(map.tile_size, walk_frames);
+    walker: GridWalker,
 
     /// Create player at a tile position.
     pub fn init(tx: u8, ty: u8) Player {
-        return .{ .tile_x = tx, .tile_y = ty };
+        return .{ .walker = GridWalker.init(tx, ty) };
     }
 
-    /// Process input and advance movement. Solid_fn checks collision.
+    /// Process input and advance movement.
     pub fn update(self: *Player, input: orb.InputState, solid_fn: *const fn (u8, u8) bool) void {
-        if (self.walk_timer == 0) {
-            var dir: ?Dir = null;
-            if (input.pressed.down) dir = .down
-            else if (input.pressed.up) dir = .up
-            else if (input.pressed.left) dir = .left
-            else if (input.pressed.right) dir = .right;
-
-            if (dir) |d| {
-                self.facing = d;
-                const target = self.facing_tile();
-                if (!solid_fn(target[0], target[1])) {
-                    self.walk_timer = walk_frames;
-                }
-            }
-        }
-
-        if (self.walk_timer > 0) {
-            self.walk_timer -= 1;
-            switch (self.facing) {
-                .down => self.px_y += step,
-                .up => self.px_y -= step,
-                .left => self.px_x -= step,
-                .right => self.px_x += step,
-            }
-            if (self.walk_timer == 0) {
-                self.px_x = 0;
-                self.px_y = 0;
-                switch (self.facing) {
-                    .down => self.tile_y += 1,
-                    .up => self.tile_y -= 1,
-                    .left => self.tile_x -= 1,
-                    .right => self.tile_x += 1,
-                }
-            }
-        }
+        self.walker.update(input, solid_fn);
     }
 
-    /// Pixel x for sprite rendering. Sprite is 32x32 centered on 16x16 tile.
-    pub fn screen_x(self: *const Player) i32 {
-        const base = @as(i32, self.tile_x) * map.tile_size - 8;
-        return base + self.px_x;
-    }
-
-    /// Pixel y for sprite rendering.
-    pub fn screen_y(self: *const Player) i32 {
-        const base = @as(i32, self.tile_y) * map.tile_size - 16;
-        return base + self.px_y;
-    }
-
-    /// Current animation frame index for the sprite strip.
-    pub fn frame(self: *const Player, spr: orb.ase.Sprite) u32 {
-        const total: u32 = spr.strip_width / spr.width;
-        if (total <= 1) return 0;
-        const dir: u32 = @intFromEnum(self.facing);
-        const fpd: u32 = total / 4;
-        if (fpd <= 1) return dir;
-        const anim: u32 = if (self.walk_timer > walk_frames / 2) 0 else if (self.walk_timer > 0) 1 else 0;
-        return dir * fpd + anim;
+    /// Whether the player is standing still.
+    pub fn idle(self: *const Player) bool {
+        return self.walker.walk_timer == 0;
     }
 
     /// Grid coords of the tile the player is facing.
     pub fn facing_tile(self: *const Player) [2]u8 {
-        return switch (self.facing) {
-            .down => .{ self.tile_x, if (self.tile_y < map.map_h - 1) self.tile_y + 1 else self.tile_y },
-            .up => .{ self.tile_x, self.tile_y -| 1 },
-            .left => .{ self.tile_x -| 1, self.tile_y },
-            .right => .{ if (self.tile_x < map.map_w - 1) self.tile_x + 1 else self.tile_x, self.tile_y },
+        return self.walker.facing_tile(255, 255);
+    }
+
+    /// Pixel x of the player tile.
+    pub fn pixel_x(self: *const Player) i32 {
+        return self.walker.pixel_x();
+    }
+
+    /// Pixel y of the player tile.
+    pub fn pixel_y(self: *const Player) i32 {
+        return self.walker.pixel_y();
+    }
+
+    /// Current animation frame index for the sprite strip.
+    /// Layout: down, left, up (N frames each). Right uses left frames flipped.
+    pub fn frame(self: *const Player, spr: Sprite) u32 {
+        const total: u32 = spr.strip_width / spr.width;
+        if (total <= 1) return 0;
+        const group: u32 = switch (self.walker.facing) {
+            .down => 0,
+            .left, .right => 1,
+            .up => 2,
         };
+        const per_dir: u32 = total / 3;
+        if (per_dir <= 1) return group;
+        const walk_frames: u32 = GridWalker.WALK_FRAMES;
+        const elapsed: u32 = walk_frames - self.walker.walk_timer;
+        const anim: u32 = if (self.walker.walk_timer > 0) elapsed * per_dir / walk_frames else 0;
+        return group * per_dir + anim;
+    }
+
+    /// Whether the sprite should be flipped horizontally.
+    pub fn flipped(self: *const Player) bool {
+        return self.walker.facing == .right;
     }
 };

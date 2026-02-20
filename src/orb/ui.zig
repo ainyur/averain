@@ -1,12 +1,40 @@
-/// Immediate mode UI widgets. Menu (Shining Force style dpad) and Console (dev overlay).
+/// Immediate mode UI widgets. Menu, Console, and Slide animation.
+const Graphics = @import("graphics.zig").Graphics;
 const font = @import("font.zig");
 const input_mod = @import("input.zig");
+const math = @import("math.zig");
 
-/// Shining Force style dpad menu. Comptime generic max_items avoids allocation.
+/// Animated slide for UI panels. Ticks a linear counter, applies easing.
+pub const Slide = struct {
+    t: i32 = 0,
+    dur: i32 = 16,
+
+    /// Advance one frame toward open (true) or closed (false).
+    pub fn tick(self: *Slide, open: bool) void {
+        if (open and self.t < self.dur) {
+            self.t += 1;
+        } else if (!open and self.t > 0) {
+            self.t -= 1;
+        }
+    }
+
+    /// Eased pixel offset, 0 when closed, height when fully open.
+    pub fn pos(self: *const Slide, height: i32) i32 {
+        return math.smooth(self.t, self.dur, height);
+    }
+
+    /// Whether the panel is at least partially visible.
+    pub fn visible(self: *const Slide) bool {
+        return self.t > 0;
+    }
+};
+
+/// Dpad menu. Comptime generic max_items avoids allocation.
 pub fn Menu(comptime max_items: u8) type {
     return struct {
         const Self = @This();
 
+        /// Menu interaction outcome: item selected or cancelled.
         pub const Result = union(enum) {
             selected: u8,
             cancelled,
@@ -41,35 +69,20 @@ pub fn Menu(comptime max_items: u8) type {
         }
 
         /// Draw bordered panel auto-sized to content with arrow cursor.
-        pub fn draw(self: *const Self, gfx: anytype, x: i32, y: i32, bg: u8, border: u8, text_color: u8, arrow_color: u8) void {
-            // Find widest label
+        pub fn draw(self: *const Self, gfx: *Graphics, x: i32, y: i32, bg: u8, border: u8, text_color: u8, arrow_color: u8) void {
             var max_len: u32 = 0;
             for (0..self.count) |i| {
                 const len: u32 = @intCast(self.items[i].len);
                 if (len > max_len) max_len = len;
             }
-            // Panel: cursor(8px) + text + 4px padding each side
-            const pw = 8 + max_len * font.char_w + 8;
-            const ph: u32 = @as(u32, self.count) * font.char_h + 8;
+            const pw = 8 + max_len * font.CHAR_W + 8;
+            const ph: u32 = @as(u32, self.count) * font.CHAR_H + 8;
             gfx.panel(x, y, pw, ph, bg, border);
 
-            // Draw items
             for (0..self.count) |i| {
-                const iy = y + 4 + @as(i32, @intCast(i)) * @as(i32, font.char_h);
-                // Arrow cursor next to selected item
+                const iy = y + 4 + @as(i32, @intCast(i)) * @as(i32, font.CHAR_H);
                 if (i == self.cursor) {
-                    if (font.glyph(0x10)) |g| {
-                        for (0..font.char_h) |row| {
-                            const bits = g[row];
-                            for (0..font.char_w) |col| {
-                                if (bits & (@as(u8, 0x80) >> @intCast(col)) != 0) {
-                                    const px_x = x + 2 + @as(i32, @intCast(col));
-                                    const px_y = iy + @as(i32, @intCast(row));
-                                    gfx.set_pixel(@intCast(@max(px_x, 0)), @intCast(@max(px_y, 0)), arrow_color);
-                                }
-                            }
-                        }
-                    }
+                    gfx.text(&[_]u8{0x10}, x + 2, iy, arrow_color);
                 }
                 gfx.text(self.items[i], x + 10, iy, text_color);
             }
@@ -80,22 +93,24 @@ pub fn Menu(comptime max_items: u8) type {
 /// Dev console overlay. Ring buffer of output lines, text input, /fps command.
 /// Uses palette indices 253 (bg), 254 (border), 255 (text).
 pub const Console = struct {
-    const max_lines = 8;
-    const max_line_len = 28;
-    const input_max = 28;
+    const MAX_LINES = 8;
+    const MAX_LINE_LEN = 28;
+    const INPUT_MAX = 28;
 
-    lines: [max_lines][max_line_len]u8 = [_][max_line_len]u8{[_]u8{0} ** max_line_len} ** max_lines,
-    line_lens: [max_lines]u8 = [_]u8{0} ** max_lines,
+    lines: [MAX_LINES][MAX_LINE_LEN]u8 = [_][MAX_LINE_LEN]u8{[_]u8{0} ** MAX_LINE_LEN} ** MAX_LINES,
+    line_lens: [MAX_LINES]u8 = [_]u8{0} ** MAX_LINES,
     head: u8 = 0,
     count: u8 = 0,
-    input_buf: [input_max]u8 = [_]u8{0} ** input_max,
+    input_buf: [INPUT_MAX]u8 = [_]u8{0} ** INPUT_MAX,
     input_len: u8 = 0,
     fps_enabled: bool = false,
+    quit: bool = false,
+    slide: Slide = .{},
 
     /// Process dev input: append text, handle backspace, execute commands on enter.
     pub fn update(self: *Console, dev: *input_mod.DevInput) void {
         for (0..dev.text_len) |i| {
-            if (self.input_len < input_max) {
+            if (self.input_len < INPUT_MAX) {
                 self.input_buf[self.input_len] = dev.text_buf[i];
                 self.input_len += 1;
             }
@@ -112,8 +127,11 @@ pub const Console = struct {
         }
     }
 
+    /// Execute a console command string.
     fn exec(self: *Console, cmd: []const u8) void {
-        if (std.mem.eql(u8, cmd, "/fps")) {
+        if (std.mem.eql(u8, cmd, "/quit")) {
+            self.quit = true;
+        } else if (std.mem.eql(u8, cmd, "/fps")) {
             self.fps_enabled = !self.fps_enabled;
             if (self.fps_enabled) {
                 self.push("FPS display on");
@@ -125,32 +143,41 @@ pub const Console = struct {
         }
     }
 
+    /// Append a message to the output ring buffer.
     fn push(self: *Console, msg: []const u8) void {
-        const slot = (self.head + self.count) % max_lines;
-        const len: u8 = @intCast(@min(msg.len, max_line_len));
+        const slot = (self.head + self.count) % MAX_LINES;
+        const len: u8 = @intCast(@min(msg.len, MAX_LINE_LEN));
         @memcpy(self.lines[slot][0..len], msg[0..len]);
         self.line_lens[slot] = len;
-        if (self.count < max_lines) {
+        if (self.count < MAX_LINES) {
             self.count += 1;
         } else {
-            self.head = (self.head + 1) % max_lines;
+            self.head = (self.head + 1) % MAX_LINES;
         }
     }
 
-    /// Draw console panel at top of screen.
-    pub fn draw(self: *const Console, gfx: anytype, bg: u8, border: u8, text_color: u8) void {
-        const ph: u32 = (max_lines + 1) * font.char_h + 10;
-        gfx.panel(0, 0, @TypeOf(gfx.*).width, ph, bg, border);
+    /// Advance slide animation one fixed tick.
+    pub fn tick(self: *Console, active: bool) void {
+        self.slide.tick(active);
+    }
+
+    /// Draw console panel at top of screen with slide animation.
+    pub fn draw(self: *Console, gfx: *Graphics, bg: u8, border: u8, text_color: u8) void {
+        if (!self.slide.visible()) return;
+
+        const ph: i32 = (MAX_LINES + 1) * font.CHAR_H + 10;
+        const y: i32 = self.slide.pos(ph) - ph;
+        gfx.panel(0, y, Graphics.WIDTH, @intCast(ph), bg, border);
 
         for (0..self.count) |i| {
-            const idx = (self.head + i) % max_lines;
+            const idx = (self.head + i) % MAX_LINES;
             const line = self.lines[idx][0..self.line_lens[idx]];
-            gfx.text(line, 4, @as(i32, @intCast(i)) * @as(i32, font.char_h) + 4, text_color);
+            gfx.text(line, 4, y + @as(i32, @intCast(i)) * @as(i32, font.CHAR_H) + 4, text_color);
         }
 
-        const input_y: i32 = @intCast(max_lines * font.char_h + 6);
+        const input_y: i32 = y + @as(i32, @intCast(MAX_LINES * font.CHAR_H + 6));
         gfx.text(">", 4, input_y, text_color);
-        gfx.text(self.input_buf[0..self.input_len], 4 + font.char_w, input_y, text_color);
+        gfx.text(self.input_buf[0..self.input_len], 4 + font.CHAR_W, input_y, text_color);
     }
 };
 

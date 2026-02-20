@@ -24,6 +24,8 @@ pub const InputState = struct {
 /// from keyboard text events, separate from gamepad-style Input.
 pub const DevInput = struct {
     console_toggle: bool = false,
+    editor_toggle: bool = false,
+    save: bool = false,
     text_buf: [32]u8 = .{0} ** 32,
     text_len: u8 = 0,
     backspace: bool = false,

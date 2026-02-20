@@ -4,17 +4,25 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Dev profile: game in Debug, deps/framework in ReleaseFast.
+    // Use plain `zig build` for dev, `zig build -Doptimize=ReleaseFast` for full release.
+    const dev = optimize == .Debug;
+    const dep_optimize: std.builtin.OptimizeMode = if (dev) .ReleaseFast else optimize;
+
     const sdl3_dep = b.dependency("sdl", .{
         .target = target,
-        .optimize = optimize,
+        .optimize = dep_optimize,
     });
 
     const orb_mod = b.createModule(.{
         .root_source_file = b.path("src/orb/orb.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = dep_optimize,
     });
     orb_mod.linkLibrary(sdl3_dep.artifact("SDL3"));
+
+    const options = b.addOptions();
+    options.addOption(bool, "dev", dev);
 
     const game_mod = b.createModule(.{
         .root_source_file = b.path("src/averain/main.zig"),
@@ -22,11 +30,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     game_mod.addImport("orb", orb_mod);
-    orb_mod.addImport("game", game_mod);
+    game_mod.addOptions("build_options", options);
 
     const exe = b.addExecutable(.{
         .name = "averain",
-        .root_module = orb_mod,
+        .root_module = game_mod,
     });
     b.installArtifact(exe);
 
