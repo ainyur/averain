@@ -1,4 +1,4 @@
-/// 8x8 bitmap font. Printable ASCII (32-126) with gothic character.
+/// 8x8 bitmap font. Printable ASCII (32-126).
 /// Each glyph is 8 bytes, one per row, MSB is leftmost pixel.
 
 pub const CHAR_W = 8;
@@ -142,4 +142,3 @@ test "space glyph is all zeros" {
         try std.testing.expectEqual(@as(u8, 0), byte);
     }
 }
-

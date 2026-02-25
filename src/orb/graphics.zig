@@ -36,15 +36,20 @@ pub const Graphics = struct {
         const sw: i32 = @intCast(sprite.width);
         const sh: i32 = @intCast(sprite.height);
 
+        // Out-of-range frame: nothing to draw.
+        if (frame * sprite.width >= sprite.strip_width) return;
+
         // Visible row range.
         const row0: u32 = @intCast(@max(0, -sy));
-        const row1: u32 = @intCast(@min(sh, @as(i32, HEIGHT) - sy));
-        if (row0 >= row1) return;
+        const row1_i = @min(sh, @as(i32, HEIGHT) - sy);
+        if (row1_i <= 0 or row0 >= @as(u32, @intCast(row1_i))) return;
+        const row1: u32 = @intCast(row1_i);
 
         // Visible column range.
         const col0: u32 = @intCast(@max(0, -sx));
-        const col1: u32 = @intCast(@min(sw, @as(i32, WIDTH) - sx));
-        if (col0 >= col1) return;
+        const col1_i = @min(sw, @as(i32, WIDTH) - sx);
+        if (col1_i <= 0 or col0 >= @as(u32, @intCast(col1_i))) return;
+        const col1: u32 = @intCast(col1_i);
 
         const src_x = frame * sprite.width;
         // Screen pixel for first visible row/col. Guaranteed non-negative by clipping.
@@ -82,6 +87,50 @@ pub const Graphics = struct {
                 while (i < vis_w) : (i += 1) {
                     if (src[i] != 0) dst[i] = src[i];
                 }
+            }
+        }
+    }
+
+    /// Blit a rectangular region from a sprite's pixel data.
+    /// src_x/src_y are pixel coordinates within the sprite's strip.
+    pub fn blit_region(self: *Graphics, sprite: ase.Sprite, src_x: u32, src_y: u32, w: u32, h: u32, dx: i32, dy: i32) void {
+        const sw: i32 = @intCast(w);
+        const sh: i32 = @intCast(h);
+
+        // Visible row range.
+        const row0: u32 = @intCast(@max(0, -dy));
+        const row1_i = @min(sh, @as(i32, HEIGHT) - dy);
+        if (row1_i <= 0 or row0 >= @as(u32, @intCast(row1_i))) return;
+        const row1: u32 = @intCast(row1_i);
+
+        // Visible column range.
+        const col0: u32 = @intCast(@max(0, -dx));
+        const col1_i = @min(sw, @as(i32, WIDTH) - dx);
+        if (col1_i <= 0 or col0 >= @as(u32, @intCast(col1_i))) return;
+        const col1: u32 = @intCast(col1_i);
+
+        const dx0: u32 = @intCast(dx + @as(i32, @intCast(col0)));
+        const dy0: u32 = @intCast(dy + @as(i32, @intCast(row0)));
+        const vis_w = col1 - col0;
+
+        for (row0..row1) |row| {
+            const dst_off = (dy0 + row - row0) * WIDTH + dx0;
+            const dst = self.px[dst_off..][0..vis_w];
+            const src_row = (src_y + @as(u32, @intCast(row))) * sprite.strip_width + src_x;
+            const src = sprite.pixels[src_row + col0 ..][0..vis_w];
+
+            var i: u32 = 0;
+            const count4 = vis_w / 4;
+            while (i < count4 * 4) : (i += 4) {
+                const quad: u32 = @bitCast(src[i..][0..4].*);
+                if (quad == 0) continue;
+                if (src[i] != 0) dst[i] = src[i];
+                if (src[i + 1] != 0) dst[i + 1] = src[i + 1];
+                if (src[i + 2] != 0) dst[i + 2] = src[i + 2];
+                if (src[i + 3] != 0) dst[i + 3] = src[i + 3];
+            }
+            while (i < vis_w) : (i += 1) {
+                if (src[i] != 0) dst[i] = src[i];
             }
         }
     }

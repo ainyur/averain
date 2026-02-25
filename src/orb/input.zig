@@ -1,3 +1,22 @@
+/// Developer input state for console interaction. Populated by the platform layer
+/// from keyboard text events, separate from gamepad-style Input.
+pub const DevInput = struct {
+    backspace: bool = false,
+    console_toggle: bool = false,
+    editor_toggle: bool = false,
+    enter: bool = false,
+    mouse_click: bool = false,
+    mouse_right: bool = false,
+    mouse_wheel: i32 = 0,
+    mouse_x: i32 = 0,
+    mouse_y: i32 = 0,
+    save: bool = false,
+    text_buf: [32]u8 = .{0} ** 32,
+    text_len: u8 = 0,
+    tile_next: bool = false,
+    tile_prev: bool = false,
+};
+
 /// Raw button state, one bool per button. Bit packed to u16.
 pub const Input = packed struct {
     a: bool = false,
@@ -18,18 +37,6 @@ pub const InputState = struct {
     held: Input = .{},
     pressed: Input = .{},
     released: Input = .{},
-};
-
-/// Developer input state for console interaction. Populated by the platform layer
-/// from keyboard text events, separate from gamepad-style Input.
-pub const DevInput = struct {
-    console_toggle: bool = false,
-    editor_toggle: bool = false,
-    save: bool = false,
-    text_buf: [32]u8 = .{0} ** 32,
-    text_len: u8 = 0,
-    backspace: bool = false,
-    enter: bool = false,
 };
 
 /// Compute input edges from current and previous frame button state.

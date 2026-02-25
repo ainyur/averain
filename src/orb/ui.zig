@@ -4,93 +4,7 @@ const font = @import("font.zig");
 const input_mod = @import("input.zig");
 const math = @import("math.zig");
 
-/// Animated slide for UI panels. Ticks a linear counter, applies easing.
-pub const Slide = struct {
-    t: i32 = 0,
-    dur: i32 = 16,
-
-    /// Advance one frame toward open (true) or closed (false).
-    pub fn tick(self: *Slide, open: bool) void {
-        if (open and self.t < self.dur) {
-            self.t += 1;
-        } else if (!open and self.t > 0) {
-            self.t -= 1;
-        }
-    }
-
-    /// Eased pixel offset, 0 when closed, height when fully open.
-    pub fn pos(self: *const Slide, height: i32) i32 {
-        return math.smooth(self.t, self.dur, height);
-    }
-
-    /// Whether the panel is at least partially visible.
-    pub fn visible(self: *const Slide) bool {
-        return self.t > 0;
-    }
-};
-
-/// Dpad menu. Comptime generic max_items avoids allocation.
-pub fn Menu(comptime max_items: u8) type {
-    return struct {
-        const Self = @This();
-
-        /// Menu interaction outcome: item selected or cancelled.
-        pub const Result = union(enum) {
-            selected: u8,
-            cancelled,
-        };
-
-        items: [max_items][]const u8 = undefined,
-        count: u8 = 0,
-        cursor: u8 = 0,
-
-        /// Create a menu from a slice of label strings.
-        pub fn init(labels: []const []const u8) Self {
-            var self: Self = .{};
-            for (labels, 0..) |label, i| {
-                if (i >= max_items) break;
-                self.items[i] = label;
-            }
-            self.count = @intCast(@min(labels.len, max_items));
-            return self;
-        }
-
-        /// Process dpad input. Returns selected index on A, cancelled on B.
-        pub fn update(self: *Self, input: input_mod.InputState) ?Result {
-            if (input.pressed.down) {
-                self.cursor = if (self.cursor + 1 >= self.count) 0 else self.cursor + 1;
-            }
-            if (input.pressed.up) {
-                self.cursor = if (self.cursor == 0) self.count -| 1 else self.cursor - 1;
-            }
-            if (input.pressed.a) return .{ .selected = self.cursor };
-            if (input.pressed.b) return .cancelled;
-            return null;
-        }
-
-        /// Draw bordered panel auto-sized to content with arrow cursor.
-        pub fn draw(self: *const Self, gfx: *Graphics, x: i32, y: i32, bg: u8, border: u8, text_color: u8, arrow_color: u8) void {
-            var max_len: u32 = 0;
-            for (0..self.count) |i| {
-                const len: u32 = @intCast(self.items[i].len);
-                if (len > max_len) max_len = len;
-            }
-            const pw = 8 + max_len * font.CHAR_W + 8;
-            const ph: u32 = @as(u32, self.count) * font.CHAR_H + 8;
-            gfx.panel(x, y, pw, ph, bg, border);
-
-            for (0..self.count) |i| {
-                const iy = y + 4 + @as(i32, @intCast(i)) * @as(i32, font.CHAR_H);
-                if (i == self.cursor) {
-                    gfx.text(&[_]u8{0x10}, x + 2, iy, arrow_color);
-                }
-                gfx.text(self.items[i], x + 10, iy, text_color);
-            }
-        }
-    };
-}
-
-/// Dev console overlay. Ring buffer of output lines, text input, /fps command.
+/// Dev console overlay. Ring buffer of output lines.
 /// Uses palette indices 253 (bg), 254 (border), 255 (text).
 pub const Console = struct {
     const MAX_LINES = 8;
@@ -178,6 +92,92 @@ pub const Console = struct {
         const input_y: i32 = y + @as(i32, @intCast(MAX_LINES * font.CHAR_H + 6));
         gfx.text(">", 4, input_y, text_color);
         gfx.text(self.input_buf[0..self.input_len], 4 + font.CHAR_W, input_y, text_color);
+    }
+};
+
+/// Dpad menu.
+pub fn Menu(comptime max_items: u8) type {
+    return struct {
+        const Self = @This();
+
+        /// Menu interaction outcome: item selected or cancelled.
+        pub const Result = union(enum) {
+            selected: u8,
+            cancelled,
+        };
+
+        items: [max_items][]const u8 = undefined,
+        count: u8 = 0,
+        cursor: u8 = 0,
+
+        /// Create a menu from a slice of label strings.
+        pub fn init(labels: []const []const u8) Self {
+            var self: Self = .{};
+            for (labels, 0..) |label, i| {
+                if (i >= max_items) break;
+                self.items[i] = label;
+            }
+            self.count = @intCast(@min(labels.len, max_items));
+            return self;
+        }
+
+        /// Process dpad input. Returns selected index on A, cancelled on B.
+        pub fn update(self: *Self, input: input_mod.InputState) ?Result {
+            if (input.pressed.down) {
+                self.cursor = if (self.cursor + 1 >= self.count) 0 else self.cursor + 1;
+            }
+            if (input.pressed.up) {
+                self.cursor = if (self.cursor == 0) self.count -| 1 else self.cursor - 1;
+            }
+            if (input.pressed.a) return .{ .selected = self.cursor };
+            if (input.pressed.b) return .cancelled;
+            return null;
+        }
+
+        /// Draw bordered panel auto-sized to content with arrow cursor.
+        pub fn draw(self: *const Self, gfx: *Graphics, x: i32, y: i32, bg: u8, border: u8, text_color: u8, arrow_color: u8) void {
+            var max_len: u32 = 0;
+            for (0..self.count) |i| {
+                const len: u32 = @intCast(self.items[i].len);
+                if (len > max_len) max_len = len;
+            }
+            const pw = 8 + max_len * font.CHAR_W + 8;
+            const ph: u32 = @as(u32, self.count) * font.CHAR_H + 8;
+            gfx.panel(x, y, pw, ph, bg, border);
+
+            for (0..self.count) |i| {
+                const iy = y + 4 + @as(i32, @intCast(i)) * @as(i32, font.CHAR_H);
+                if (i == self.cursor) {
+                    gfx.text(&[_]u8{0x10}, x + 2, iy, arrow_color);
+                }
+                gfx.text(self.items[i], x + 10, iy, text_color);
+            }
+        }
+    };
+}
+
+/// Animated slide for UI panels. Ticks a linear counter, applies easing.
+pub const Slide = struct {
+    dur: i32 = 16,
+    t: i32 = 0,
+
+    /// Advance one frame toward open (true) or closed (false).
+    pub fn tick(self: *Slide, open: bool) void {
+        if (open and self.t < self.dur) {
+            self.t += 1;
+        } else if (!open and self.t > 0) {
+            self.t -= 1;
+        }
+    }
+
+    /// Eased pixel offset, 0 when closed, height when fully open.
+    pub fn pos(self: *const Slide, height: i32) i32 {
+        return math.smooth(self.t, self.dur, height);
+    }
+
+    /// Whether the panel is at least partially visible.
+    pub fn visible(self: *const Slide) bool {
+        return self.t > 0;
     }
 };
 

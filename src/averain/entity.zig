@@ -10,7 +10,7 @@ pub const Entity = struct {
     dialogue_id: u8,
 
     /// Entity types affecting rendering and interaction.
-    pub const Kind = enum(u8) { npc, object };
+    pub const Kind = enum(u8) { npc, object, player };
 };
 
 /// Scene entities. Arawn and the standing stone.
@@ -48,6 +48,7 @@ pub fn render(gfx: *orb.Graphics, arawn_spr: orb.ase.Sprite, stone_spr: orb.ase.
                 const off = stone_spr.center(map.TILE_SIZE);
                 gfx.blit(stone_spr, tx + off[0], ty + off[1]);
             },
+            .player => {},
         }
     }
 }

@@ -1,9 +1,9 @@
-const std = @import("std");
 const c = @cImport({
     @cDefine("SDL_MAIN_HANDLED", "1");
     @cInclude("SDL3/SDL.h");
     @cInclude("SDL3/SDL_main.h");
 });
+const std = @import("std");
 const Graphics = @import("../graphics.zig").Graphics;
 const input_mod = @import("../input.zig");
 const ui_mod = @import("../ui.zig");
@@ -115,7 +115,30 @@ fn Platform(comptime Game: type) type {
                     } else if (scancode == c.SDL_SCANCODE_RETURN) {
                         app.dev_input.enter = true;
                     }
+                } else {
+                    if (scancode == c.SDL_SCANCODE_LEFTBRACKET) {
+                        app.dev_input.tile_prev = true;
+                    } else if (scancode == c.SDL_SCANCODE_RIGHTBRACKET) {
+                        app.dev_input.tile_next = true;
+                    }
                 }
+            }
+
+            if (ev[0].type == c.SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                var lx: f32 = 0;
+                var ly: f32 = 0;
+                _ = c.SDL_RenderCoordinatesFromWindow(app.renderer, ev[0].button.x, ev[0].button.y, &lx, &ly);
+                app.dev_input.mouse_x = @intFromFloat(lx);
+                app.dev_input.mouse_y = @intFromFloat(ly);
+                if (ev[0].button.button == c.SDL_BUTTON_LEFT) {
+                    app.dev_input.mouse_click = true;
+                } else if (ev[0].button.button == c.SDL_BUTTON_RIGHT) {
+                    app.dev_input.mouse_right = true;
+                }
+            }
+
+            if (ev[0].type == c.SDL_EVENT_MOUSE_WHEEL) {
+                app.dev_input.mouse_wheel += @intFromFloat(ev[0].wheel.y);
             }
 
             if (ev[0].type == c.SDL_EVENT_GAMEPAD_ADDED and app.gamepad == null) {

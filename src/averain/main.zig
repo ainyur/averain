@@ -9,7 +9,6 @@ const player_mod = @import("player.zig");
 
 const Assets = assets_mod.Assets;
 
-/// Averain game cartridge. Pwyll's Forest vertical slice.
 pub const Game = struct {
     pub const TITLE = "averain";
     pub const WINDOW_WIDTH: u32 = 1280;
@@ -44,16 +43,16 @@ pub const Game = struct {
     assets: Assets,
     box: DBox = DBox.init(dialogue.NODES),
     choice_menu: orb.ui.Menu(2) = .{ .count = 0 },
-    ed: editor_mod.Editor = .{},
+    ed: editor_mod.Editor,
     flags: Flags = .{},
     mode: Mode = .explore,
     player: player_mod.Player,
 
     /// Create initial game state. Player spawns on the path at bottom.
     pub fn init(alloc: std.mem.Allocator) !Game {
-        map.init();
         return .{
             .assets = try Assets.init(alloc),
+            .ed = .{ .data = map.data },
             .player = player_mod.Player.init(9, 10),
         };
     }
@@ -67,10 +66,11 @@ pub const Game = struct {
         }
     }
 
-    /// Handle dev input (save key).
+    /// Handle dev input (mouse, save).
     pub fn dev_update(state: *Game, dev_input: orb.DevInput) void {
-        if (state.mode == .editor and dev_input.save) {
-            state.ed.save();
+        if (state.mode == .editor) {
+            state.ed.mouse(dev_input, state.assets.slices);
+            if (dev_input.save) state.ed.save("src/averain/assets/world.map");
         }
     }
 
@@ -84,7 +84,7 @@ pub const Game = struct {
         switch (state.mode) {
             .choice => state.do_choice(input),
             .dialogue => state.do_dialogue(input),
-            .editor => state.ed.update(input, state.assets.tiles),
+            .editor => state.ed.update(input, state.assets.tiles, state.assets.slices),
             .explore => state.do_explore(input),
         }
         state.box.tick_slide();
@@ -139,7 +139,7 @@ pub const Game = struct {
                     const n = &dialogue.NODES[state.box.node];
                     if (n.choice) |c| {
                         if (sel == 0) state.flags.chose_exchange = true;
-                        state.box.start(c.targets[sel]);
+                        state.box.start(c.next[sel]);
                         state.mode = .dialogue;
                     }
                 },
@@ -154,7 +154,7 @@ pub const Game = struct {
         gfx.clear(BLACK);
 
         if (state.mode == .editor) {
-            state.ed.draw(gfx, state.assets.tiles);
+            state.ed.draw(gfx, state.assets.tiles, state.assets.slices);
             return;
         }
 
@@ -173,7 +173,6 @@ pub const Game = struct {
     }
 };
 
-/// Entry point. Launches the game on the SDL3 platform.
 pub fn main() u8 {
     return orb.run(Game);
 }

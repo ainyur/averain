@@ -17,7 +17,7 @@ pub const Node = struct {
     /// Binary dialogue choice: two labels mapping to two target nodes.
     pub const Choice = struct {
         labels: [2][]const u8,
-        targets: [2]u8,
+        next: [2]u8,
     };
 };
 
@@ -195,7 +195,7 @@ test "box choice node returns show_choice" {
     const nodes: []const Node = &.{
         .{ .text = "Pick.", .choice = .{
             .labels = .{ "Yes", "No" },
-            .targets = .{ 1, 2 },
+            .next = .{ 1, 2 },
         } },
         .{ .text = "Good." },
         .{ .text = "Bad." },

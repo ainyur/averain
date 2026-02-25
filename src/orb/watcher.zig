@@ -2,10 +2,10 @@
 /// Non-blocking poll watches a directory for CLOSE_WRITE events.
 const std = @import("std");
 
-const posix = std.posix;
 const linux = std.os.linux;
+const posix = std.posix;
 
-/// IN_CLOSE_WRITE: writable file was closed.
+/// Writable file was closed.
 const IN_CLOSE_WRITE: u32 = 0x00000008;
 
 /// File watcher backed by Linux inotify.

@@ -363,6 +363,169 @@ fn load_layers(data: []const u8) [64]bool {
     return visible;
 }
 
+/// Load slice metadata from an .ase file at runtime. Caller owns returned slice.
+pub fn load_slices(alloc: Allocator, data: []const u8) ![]Slice {
+    if (data.len < FILE_HEADER_SIZE) return error.InvalidHeader;
+    const num_frames = read16(data, FH_FRAMES);
+
+    // Count slices.
+    var count: usize = 0;
+    var pos: usize = FILE_HEADER_SIZE;
+    for (0..num_frames) |_| {
+        if (pos + FRAME_HEADER_SIZE > data.len) break;
+        const frame_size = read32(data, pos);
+        const old_chunks = read16(data, pos + FRH_OLD_CHUNKS);
+        const new_chunks = read32(data, pos + FRH_NEW_CHUNKS);
+        const num_chunks: usize = if (new_chunks != 0) new_chunks else old_chunks;
+        var cp: usize = pos + FRAME_HEADER_SIZE;
+        for (0..num_chunks) |_| {
+            if (cp + CHUNK_HEADER_SIZE > data.len) break;
+            const cs = read32(data, cp);
+            if (cs == 0) break;
+            if (read16(data, cp + 4) == 0x2022) count += 1;
+            cp += cs;
+        }
+        pos += frame_size;
+    }
+
+    if (count == 0) return error.NoSlices;
+    const slices = try alloc.alloc(Slice, count);
+    errdefer alloc.free(slices);
+
+    // Collect slices.
+    var si: usize = 0;
+    pos = FILE_HEADER_SIZE;
+    var prev_was_slice = false;
+
+    for (0..num_frames) |_| {
+        if (pos + FRAME_HEADER_SIZE > data.len) break;
+        const frame_size = read32(data, pos);
+        const old_chunks = read16(data, pos + FRH_OLD_CHUNKS);
+        const new_chunks = read32(data, pos + FRH_NEW_CHUNKS);
+        const num_chunks: usize = if (new_chunks != 0) new_chunks else old_chunks;
+        var cp: usize = pos + FRAME_HEADER_SIZE;
+
+        for (0..num_chunks) |_| {
+            if (cp + CHUNK_HEADER_SIZE > data.len) break;
+            const cs = read32(data, cp);
+            if (cs == 0) break;
+            const ct = read16(data, cp + 4);
+            if (cp + cs > data.len) break;
+            const cd = data[cp + CHUNK_HEADER_SIZE .. cp + cs];
+
+            if (ct == 0x2022 and cd.len >= 34) {
+                const name_len = read16(cd, 12);
+                if (14 + name_len + 20 <= cd.len) {
+                    const key_off = 14 + name_len;
+                    slices[si] = .{
+                        .name = cd[14 .. 14 + name_len],
+                        .x = @intCast(read32(cd, key_off + 4)),
+                        .y = @intCast(read32(cd, key_off + 8)),
+                        .w = @intCast(read32(cd, key_off + 12)),
+                        .h = @intCast(read32(cd, key_off + 16)),
+                        .user_data = &.{},
+                    };
+                    si += 1;
+                    prev_was_slice = true;
+                }
+            } else if (ct == 0x2020 and prev_was_slice and si > 0) {
+                const flags = read32(cd, 0);
+                if (flags & 1 != 0 and cd.len >= 6) {
+                    const text_len = read16(cd, 4);
+                    if (6 + text_len <= cd.len) {
+                        slices[si - 1].user_data = cd[6 .. 6 + text_len];
+                    }
+                }
+                prev_was_slice = false;
+            } else {
+                prev_was_slice = false;
+            }
+
+            cp += cs;
+        }
+        pos += frame_size;
+    }
+
+    return slices[0..si];
+}
+
+/// Rearrange tile pixels from 2D slice regions into a sequential horizontal
+/// strip. Runtime counterpart to parse_sheet's comptime rasterization.
+/// Tile IDs are 1-based (frame 0 is unused padding for the empty tile).
+pub fn rearrange(alloc: Allocator, raw: Sprite, slices: []const Slice, tile_size: u32) !Sprite {
+    const ts: u32 = tile_size;
+    var total: u32 = 0;
+    for (slices) |s| {
+        total += (s.w / ts) * (s.h / ts);
+    }
+    const strip_w = (total + 1) * ts;
+    const pixels = try alloc.alloc(u8, strip_w * ts);
+    @memset(pixels, 0);
+
+    var ti: u32 = 1;
+    for (slices) |s| {
+        const cols = s.w / ts;
+        const rows = s.h / ts;
+        for (0..rows) |tr| {
+            for (0..cols) |tc| {
+                const src_x = @as(u32, s.x) + @as(u32, @intCast(tc)) * ts;
+                const src_y = @as(u32, s.y) + @as(u32, @intCast(tr)) * ts;
+                const dst_x = ti * ts;
+                for (0..ts) |py| {
+                    const src_off = (src_y + @as(u32, @intCast(py))) * raw.strip_width + src_x;
+                    const dst_off = @as(u32, @intCast(py)) * strip_w + dst_x;
+                    @memcpy(pixels[dst_off..][0..ts], raw.pixels[src_off..][0..ts]);
+                }
+                ti += 1;
+            }
+        }
+    }
+
+    return .{
+        .width = @intCast(ts),
+        .height = @intCast(ts),
+        .strip_width = @intCast(strip_w),
+        .pixels = pixels,
+    };
+}
+
+/// Rule mapping a user_data tag name to a tile property bit flag.
+pub const PropRule = struct {
+    tag: []const u8,
+    flag: u8,
+};
+
+/// Build tile property flags from ASE slice user_data.
+/// Each rule's tag is matched against slice user_data text.
+/// "tag" marks all tiles in the slice. "tag:0,2,5" marks specific local indices.
+pub fn build_props(slices: []const Slice, tile_size: u32, rules: []const PropRule) [256]u8 {
+    var p: [256]u8 = [_]u8{0} ** 256;
+    var base: u8 = 1;
+    for (slices) |s| {
+        const count: u8 = @intCast((s.w / tile_size) * (s.h / tile_size));
+        for (rules) |rule| {
+            if (std.mem.indexOf(u8, s.user_data, rule.tag)) |pos| {
+                const after = pos + rule.tag.len;
+                if (after < s.user_data.len and s.user_data[after] == ':') {
+                    var rest = s.user_data[after + 1 ..];
+                    while (rest.len > 0) {
+                        const sep = std.mem.indexOfScalar(u8, rest, ',') orelse rest.len;
+                        const idx = std.fmt.parseInt(u8, rest[0..sep], 10) catch break;
+                        if (idx < count) p[base + idx] |= rule.flag;
+                        rest = if (sep < rest.len) rest[sep + 1 ..] else &.{};
+                    }
+                } else {
+                    for (0..count) |i| {
+                        p[base + @as(u8, @intCast(i))] |= rule.flag;
+                    }
+                }
+            }
+        }
+        base +|= count;
+    }
+    return p;
+}
+
 /// Scan all frames for slice chunks (0x2022) and their user data (0x2020).
 fn scan_slices(comptime data: []const u8) []const Slice {
     comptime {
